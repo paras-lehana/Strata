@@ -956,6 +956,24 @@ float* upload_f32(const strata::TensorInfo& t, const uint8_t* src) {
     return d;
 }
 
+// Opt-in Windows residency hint for read-only GGUF pages already copied elsewhere.
+// The mapping and file bytes remain valid. ERROR_NOT_LOCKED is the documented
+// result when unlocked pages are removed from this process's working set.
+void trim_gguf_view(const uint8_t* data, size_t bytes) {
+#ifdef _WIN32
+    const char* value = std::getenv("STRATA_Q36_TRIM_GGUF");
+    if (!value || std::string(value) != "1") return;
+    if (!VirtualUnlock(const_cast<uint8_t*>(data), bytes)) {
+        const DWORD error = GetLastError();
+        if (error != ERROR_NOT_LOCKED)
+            std::fprintf(stderr, "strata-q36: GGUF view trim failed: Windows error %lu\n", (unsigned long) error);
+    }
+#else
+    (void) data;
+    (void) bytes;
+#endif
+}
+
 bool load(const std::string& path, Model& m, std::string& err, bool want_mtp) {
     const auto t0 = Clock::now();
     m.file = std::make_shared<strata::GgufModel>(strata::GgufModel::open(path));
@@ -1108,6 +1126,10 @@ bool load(const std::string& path, Model& m, std::string& err, bool want_mtp) {
         m.embd = d;
         bytes += nb;
     }
+    for (size_t s = 0; s < gm.size(); ++s)
+        for (const auto& tensor : gm.shard(s).tensors())
+            if (tensor.name.find("_exps.weight") == std::string::npos)
+                trim_gguf_view(gm.shard(s).tensor_data(tensor), (size_t) strata::tensor_payload_bytes(tensor));
     std::fprintf(stderr, "strata-q36: %s: %zu tensors (layout checked), %.2f GiB on the GPU in %.1f s (the routed "
                  "experts are placed after the engine's buffers)\n", path.c_str(), checked, (double) bytes / (1 << 30),
                  ms_since(t0) / 1000.0);
@@ -2955,6 +2977,9 @@ bool place_experts(Model& m, Engine& E, double vram_gib, int threads, int hybrid
         off += L.stride * (size_t) ne + kMmqTail;
         std::memset(L.hblobs, 0, L.stride * (size_t) ne + kMmqTail);
         for (int64_t e = 0; e < ne; ++e) expert_blob(L, e, L.hblobs + (size_t) e * L.stride);
+        trim_gguf_view(L.src_g, (size_t) ne * L.src_gsz);
+        trim_gguf_view(L.src_u, (size_t) ne * L.src_gsz);
+        trim_gguf_view(L.src_d, (size_t) ne * L.src_dsz);
         L.n_slots = S;
         if (S > 0) {
             CK(cudaMalloc(&L.blobs, L.stride * (size_t) S + kMmqTail));
