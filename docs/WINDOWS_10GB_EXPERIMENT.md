@@ -20,7 +20,7 @@ There is no hard 12 GB gate removed by this fork.
    Without the variable, the helper returns immediately. Other platforms do
    not perform the Windows call.
 
-## Measured so far
+## Measured Qwen results
 
 Windows11, RTX3080 10GB, Ryzen7 5800X, 64GB DDR4; ordinary apps remain open.
 Typically 25–26GiB host RAM and 6.5–6.9GiB device memory were available before
@@ -42,9 +42,32 @@ An earlier downloader retained6.50GiB committed memory even while suspended.
 Removing that interference was separate from the source patch.
 
 The initial32K API greeting answers correctly. A subsequent multi-file request
-hits the600MiB free-VRAM floor and is stopped, unscored. Serving with a smaller
-prompt chunk and graphs disabled is being evaluated. Do not treat a native
-benchmark pass as evidence that an editor conversation fits.
+hits the600MiB free-VRAM floor and is stopped, unscored. Serving with64-token
+prompt chunks and `--no-graph` completes three public coding/history workflows.
+This combined change is not an isolated CUDA graph ablation. Do not treat a
+native benchmark pass as evidence that an editor conversation fits.
+
+Same-day practical comparison, identical Qwen Q4 file and32K context:
+
+| Public task | Strata | llama.cpp | Independent/source checks |
+|---|---:|---:|---|
+|Instruction router + Python merge repair|286.516s|436.469s|Both Python6/6, self-tests7/7; all7 sources read, unknown facts honest|
+|Retained history + changed-file read|250.625s|285.891s|Both6/6 facts; about11.4K maximum input, not128K|
+|TypeScript normalization + SQLite migration|203.765s|357.687s|Both TS5/6; Strata migration fails FK enforcement, llama SQL6/6|
+
+Each is one sample, seed73, temperature0.6, top_p0.95, top_k20, min_p0,
+8192output limit,2048thinking ceiling per turn and1200seconds per whole task.
+The llama control uses b11562 with a Windows prefetch opt-out, CPU q8 KV,
+37CPU expert blocks and4/8CPU threads; Strata uses GPU fp32 KV, a full host
+expert arena and8workers plus the host thread. Tool serialization, desktop
+memory and file cache also differ. These are usable-configuration timings,
+not an isolated engine comparison, a general6x result, or proof of greater
+model intelligence. Downloads were stopped during these timings.
+
+The successful Strata API profile peaks at20.09GiB process working set and
+9344MiB whole-device usage (including other apps), with minimum896MiB free
+VRAM and2.619GiB free system RAM. Native32K KV alone is1.25GiB GPU memory.
+The serving variant of the command below uses `--prefill 64 --no-graph`.
 
 The successful native smoke uses:
 
@@ -67,9 +90,9 @@ Flash-Next's host-budget and KV-streaming flags belong to another engine path.
 
 ## Limits
 
-No completed coding score, 128K Qwen serving result, real8GB hardware test,
-HIP/SYCL build, broad numerical-equivalence test, or upstream PR review is claimed
-at this checkpoint. Only CUDA was built here. Native defaults were not changed.
-Do not adopt this fork as a replacement for a working long-context server based
-on the short throughput figures. The lab report retains every failed trial and
-will distinguish later completed answers from these initial measurements.
+No128K Qwen serving result, real8GB hardware test, HIP/SYCL build, broad
+numerical-equivalence test, or upstream PR review is claimed. Only CUDA was
+built here. Native defaults were not changed. Codex assessed source grounding;
+reviewed code ran in a separate restricted grader. This is not independent
+human review. Keep the proven long-context server while investigating this
+experimental path. See the lab's [aggregate evidence](https://github.com/paras-lehana/local-coding-lab/blob/experiment/strata-20261018/reports/2026-10-18-strata-qwen.json).
