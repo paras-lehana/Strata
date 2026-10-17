@@ -259,6 +259,38 @@ int main(int argc, char** argv) {
               "an inconsistent ssm.inner_size is refused");
     }
     {
+        // Non-MTP exports omit the optional nextn key. Keep explicit counts validated.
+        Dims plain = kQwen36;
+        plain.block_count = 40;
+        plain.nextn = 0;
+        const fs::path p = d.path / "no-mtp.gguf";
+        auto kv = metadata("qwen35moe", plain, 8);
+        strata::core::ModelGeometry g;
+        int64_t k = 0;
+        std::string err;
+        fixture::write(p, kv, {});
+        check(geometry_of(p, g, k, err) && g.n_layers == 40 && g.n_mtp_layers == 0,
+              "an explicit zero MTP count keeps all 40 trunk layers");
+        for (auto it = kv.begin(); it != kv.end(); ++it)
+            if (it->key == "qwen35moe.nextn_predict_layers") { kv.erase(it); break; }
+        fixture::write(p, kv, {});
+        check(geometry_of(p, g, k, err) && g.n_layers == 40 && g.n_mtp_layers == 0 && g.n_qsa_layers() == 10,
+              "an absent MTP count defaults to zero without dropping a trunk layer");
+        kv.push_back(fixture::str("qwen35moe.nextn_predict_layers", "invalid"));
+        fixture::write(p, kv, {});
+        check(!geometry_of(p, g, k, err) && err.find("not a number") != std::string::npos,
+              "a present nonnumeric MTP count is refused");
+        kv.back() = fixture::u32("qwen35moe.nextn_predict_layers", 40);
+        fixture::write(p, kv, {});
+        check(!geometry_of(p, g, k, err) && err.find("not smaller") != std::string::npos,
+              "an MTP count consuming every block is refused");
+        Dims tiny = kTiny36;
+        tiny.block_count = 4;
+        tiny.nextn = 0;
+        check(layout_error(d.path, "qwen35moe", tiny, 16, nullptr).empty(),
+              "a complete non-MTP qwen35moe tensor layout passes");
+    }
+    {
         // the layout tables
         check(layout_error(d.path, "qwen35moe", kTiny36, 16, nullptr).empty(),
               "a complete qwen35moe file passes its layout (incl. the nextn MTP block)");
