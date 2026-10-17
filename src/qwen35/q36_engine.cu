@@ -2919,7 +2919,15 @@ bool place_experts(Model& m, Engine& E, double vram_gib, int threads, int hybrid
     for (Layer* L : all)
         if (!mtp_only || L == &m.mtp) host += L->stride * (size_t) ne + kMmqTail;
     uint8_t* arena = nullptr;
-    bool pinned = cudaHostAlloc((void**) &arena, host, cudaHostAllocDefault) == cudaSuccess;
+    // Opt-in for memory-constrained hosts: use the existing pageable fallback
+    // without first locking the whole expert arena. This may reduce overlap and
+    // throughput; it is not a commit cap or a file-backed expert tier.
+    const char* pageable_env = std::getenv("STRATA_Q36_PAGEABLE_EXPERTS");
+    const bool pageable = pageable_env && std::string(pageable_env) == "1";
+    if (pageable)
+        std::fprintf(stderr, "strata-q36: pageable expert arena requested (STRATA_Q36_PAGEABLE_EXPERTS=1); "
+                     "host-to-device copies may stage synchronously\n");
+    bool pinned = !pageable && cudaHostAlloc((void**) &arena, host, cudaHostAllocDefault) == cudaSuccess;
     if (!pinned) {
         (void) cudaGetLastError();
         arena = (uint8_t*) std::malloc(host);
