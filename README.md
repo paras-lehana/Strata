@@ -1,5 +1,10 @@
 <h1 align="center">Strata</h1>
 
+> **Experimental Windows 10 GB fork:** this branch contains three focused
+> Qwen3.6 compatibility/residency changes on upstream v0.1.45. It is not an
+> upstream release or an 8 GB certification. Read the
+> [configuration, measurements and limits](docs/WINDOWS_10GB_EXPERIMENT.md).
+
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt-BR.md)
 
 <p align="center"><b>Run a 125-billion-parameter AI model on your own gaming PC</b><br>
